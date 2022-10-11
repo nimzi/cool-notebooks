@@ -1,0 +1,141 @@
+#!fsharp
+
+let y = [1;2;33;44;109]
+List.map (fun z->z*z) y
+
+#!fsharp
+
+#r "nuget: SkiaSharp"
+#r "nuget: MathNet.Numerics, 5.0.0"
+#r "nuget: MathNet.Numerics.FSharp, 5.0.0"
+open SkiaSharp
+open MathNet.Numerics
+open MathNet.Numerics.LinearAlgebra
+
+let v1 = vector [ 1.0; 2.0; 3.0 ]
+let c = complex 1 2
+let d = complex 3 4
+display c.r
+display c.i
+display (c + d)
+
+Complex.mkPolar (1, Constants.Pi)
+
+#!fsharp
+
+let info = SKImageInfo(512, 512)
+let surface = SKSurface.Create(info)
+let canvas = surface.Canvas
+
+let redBrush = new SKPaint(Color = SKColor(255uy, 0uy, 0uy),IsStroke = true,IsAntialias = true)
+let blueBrush = new SKPaint(Color = SKColor(0uy, 0uy, 255uy), IsStroke = true,IsAntialias = true)
+let greenBrush = new SKPaint(Color = SKColor(0uy, 200uy, 0uy), IsStroke = false,IsAntialias = true)
+let yellowBrush = new SKPaint(Color = SKColor(200uy, 200uy, 0uy), IsStroke = false,IsAntialias = true)
+
+let R = 30f
+let D = 2f * R 
+let rotation = Complex.mkPolar(1,Constants.Pi / 3.0) 
+let v = (rotation * float R * 2.0) 
+
+let rec power' (c:complex, i:uint) = if i = 0u then c else c * power'(c, i - 1u)
+let u = ( (power' (rotation, 1u)) * float R * 2.0) 
+
+canvas.Clear(SKColors.White)
+canvas.Translate(SKPoint(256f, 256f))
+
+// axial to cube coordinates
+let axialToCube(q,r) = q, r, -q-r
+
+
+let cubeDist ((a1,a2,a3):int*int*int) ((b1,b2,b3):int*int*int) =
+    let (a,b,c) = (a1-b1,a2-b2,a3-b3)
+    let tmp = max  (abs(a)) (abs(b))
+    max tmp (abs(c))
+
+    
+canvas.DrawCircle(0f, 0f, R, blueBrush)
+
+let S = power' (rotation, 5u) * float D
+let T = rotation * float D 
+let drawCircle (c:complex) brush = canvas.DrawCircle(float32 c.r, float32 c.i, R, brush)
+
+//display (rotation * rotation * float R)
+//drawCircle (rotation * float R) redBrush
+
+for i in 0u..5u do 
+   let u =  (power' (rotation, i) * float R * 2.0)
+   drawCircle u redBrush
+
+// axial coordinates
+let center (q:int) (r:int) = (float q * S) + (float r * T)
+//let w = center 1 1
+let w1 = center 0 -1
+let w2 = center -1 0
+let w3 = center 1 0
+let w4 = center 0 1
+let w5 = center -1 1
+let w6 = center 1 -1
+//drawCircle w greenBrush
+drawCircle w1 greenBrush
+drawCircle w2 greenBrush
+drawCircle w3 greenBrush
+drawCircle w4 greenBrush
+drawCircle w5 greenBrush
+drawCircle w6 greenBrush
+
+let neighbors (a,b) = [(a,b-1); (a-1,b); (a+1,b); (a,b+1); (a-1,b+1); (a+1,b-1)]
+
+let brothers = neighbors (0,0)
+
+for u,w in brothers do
+    for a,b in (neighbors (u,w)) do
+        let origin = axialToCube (0,0)
+        let nbr = axialToCube (a,b)
+        if cubeDist origin nbr = 2 then
+            drawCircle (center a b) yellowBrush
+
+
+let a = axialToCube (0, -1)
+let b = axialToCube (1, 1)
+display (cubeDist a b)
+
+surface.Snapshot().Display()
+
+#!fsharp
+
+let neighborsOfRing (r:Set<int*int>) (dist:int) =
+    seq { 
+        for a,b in r do 
+            let p2 = (0,0,0)
+            //yield cubeDist p1 p2 } |> Set.ofSeq
+            yield! [ for nn in neighbors (a,b) do 
+                let p1 = axialToCube nn
+                if cubeDist p1 p2 = dist then 
+                    yield nn
+            ] } |> Set.ofSeq
+
+#!fsharp
+
+canvas.Clear(SKColors.White)
+let n =  (neighbors (0,0))
+let nn = Set.ofList n
+
+let secondRing = neighborsOfRing nn 2
+
+for a,b in secondRing do
+    drawCircle (center a b) redBrush
+
+
+
+let thirdRing = neighborsOfRing secondRing 3
+
+
+for a,b in thirdRing do
+    drawCircle (center a b) blueBrush
+
+let forthRing = neighborsOfRing thirdRing 4
+
+for a,b in forthRing do
+    drawCircle (center a b) greenBrush
+
+surface.Snapshot().Display()
